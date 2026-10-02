@@ -90,6 +90,12 @@ const CATEGORIES = [
   { key: 'catTickets', name: 'TICKETS', profile: 'hidden', channels: [] },
 ];
 
+// Channels older versions of /setup made that are no longer wanted. /setup deletes these, but only when
+// they're inside the STUDIO TEAM category and nobody has posted in them, so nothing real is lost.
+const RETIRED = [
+  { category: 'catTeam', names: ['scripting', 'building', 'modeling', 'ui-design', 'animation', 'audio', 'assets', 'playtest-notes', 'git-feed'] },
+];
+
 const RULES = [
   ['Be respectful', 'No harassment, hate speech, slurs or personal attacks. Disagree with ideas, not people.'],
   ['Keep it safe', 'No NSFW, gore or shock content anywhere, including names and avatars.'],
@@ -101,4 +107,4 @@ const RULES = [
   ['Staff have the final say', 'If a mod asks you to stop, stop. Disagree with a decision? Open a ticket.'],
 ];
 
-module.exports = { ROLES, CATEGORIES, RULES };
+module.exports = { ROLES, CATEGORIES, RULES, RETIRED };

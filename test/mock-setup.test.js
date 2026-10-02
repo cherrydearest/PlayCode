@@ -11,7 +11,6 @@ const { Store } = require('../src/lib/store');
 const { runSetup } = require('../src/setup/runSetup');
 const { ROLES, CATEGORIES } = require('../src/setup/blueprint');
 const { parseDuration } = require('../src/lib/util');
-const { squash, makeCode } = require('../src/features/verify');
 
 let nextId = 1000n;
 const snow = () => String(nextId++);
@@ -51,7 +50,8 @@ function fakeGuild({ admin = true, community = false, existing = [] } = {}) {
         ch.messages.set(msg.id, msg); guild.sent.push(msg); return msg;
       },
     };
-    ch.messages.fetch = async (id) => { const m = ch.messages.get(id); if (!m) throw new Error('Unknown Message'); return m; };
+    ch.delete = async () => { channels.delete(ch.id); ch.deleted = true; };
+    ch.messages.fetch = async (id) => { if (typeof id === 'object') return ch.messages; const m = ch.messages.get(id); if (!m) throw new Error('Unknown Message'); return m; };
     channels.set(ch.id, ch); return ch;
   };
   existing.forEach((e) => makeChannel(e));
@@ -60,6 +60,7 @@ function fakeGuild({ admin = true, community = false, existing = [] } = {}) {
     fetch: async (id) => (id ? channels.get(id) : channels),
     create: async (o) => { guild.calls.channelCreate++; return makeChannel(o); },
   };
+  guild.makeChannel = makeChannel;
   guild.members = { me, fetchMe: async () => me, fetch: async (id) => (id === 'OWNER' ? owner : null) };
   guild.owner = owner;
   return guild;
@@ -112,7 +113,7 @@ test('preview changes nothing', async () => {
   assert.ok(!s.get('setup', 'done'));
 });
 
-test('existing channels are reused, moved into place, and left alone unless fix_permissions', async () => {
+test('existing channels are taken over on the first run, then left as you tuned them', async () => {
   const keep = [{ id: 'x', allow: [P.ViewChannel], deny: [] }];
   const g = fakeGuild({ existing: [{ name: 'general', type: ChannelType.GuildText, permissionOverwrites: keep }, { name: 'Rules', type: ChannelType.GuildText }] });
   const s = tmpStore();
@@ -120,11 +121,37 @@ test('existing channels are reused, moved into place, and left alone unless fix_
   assert.deepStrictEqual(r.adopted.channels.sort(), ['#Rules', '#general']);
   assert.strictEqual(r.created.channels.length, channelCount - 2);
   const general = byKey(g, s, 'general');
-  assert.strictEqual(general.overwrites, keep, 'permissions on adopted channel should be untouched');
+  assert.notStrictEqual(general.overwrites, keep, 'taken-over channel should get studio permissions');
+  assert.ok(deny(general, g.id, P.ViewChannel) && allow(general, s.roleId('verified'), P.SendMessages));
   assert.strictEqual(general.parentId, s.get('setup', 'categories', 'catCommunity'));
-  assert.ok(r.warnings.some((w) => w.includes('fix_permissions')));
-  await runSetup({ guild: g, store: s, options: { fixPermissions: true } });
-  assert.notStrictEqual(byKey(g, s, 'general').overwrites, keep);
+  // Later runs leave hand-tuned permissions alone.
+  const tuned = [{ id: 'y', allow: [P.ViewChannel], deny: [] }];
+  general.overwrites = tuned;
+  await runSetup({ guild: g, store: s, options: {} });
+  assert.strictEqual(byKey(g, s, 'general').overwrites, tuned);
+});
+
+test('old team channels are cleaned up, but only empty ones in STUDIO TEAM', async () => {
+  const g = fakeGuild(); const s = tmpStore();
+  await runSetup({ guild: g, store: s, options: {} });
+  const team = s.get('setup', 'categories', 'catTeam');
+  const mk = (name, parent) => g.makeChannel({ name, type: ChannelType.GuildText, parent });
+  const empty = ['scripting', 'building', 'git-feed'].map((n) => mk(n, team));
+  const busy = mk('assets', team);
+  busy.messages.set('m1', { author: { bot: false } });
+  const elsewhere = mk('audio', s.get('setup', 'categories', 'catCommunity'));
+  // Simulate the old version having recorded one of them.
+  s.update((d) => { d.setup.channels.scripting = empty[0].id; });
+  const preview = await runSetup({ guild: g, store: s, options: { preview: true } });
+  assert.strictEqual(preview.removed.length, 4);
+  assert.ok(empty.every((c) => !c.deleted), 'preview must not delete');
+  const r = await runSetup({ guild: g, store: s, options: {} });
+  assert.deepStrictEqual(r.removed.sort(), ['#building', '#git-feed', '#scripting']);
+  assert.ok(empty.every((c) => c.deleted));
+  assert.ok(!busy.deleted && r.warnings.some((w) => w.includes('#assets')));
+  assert.ok(!elsewhere.deleted, 'same name in another category is left alone');
+  assert.ok(!('scripting' in s.get('setup', 'channels')));
+  assert.ok(byKey(g, s, 'teamChat') && byKey(g, s, 'tasks'));
 });
 
 test('permissions: unverified, members, team and staff see the right things', async () => {
@@ -182,14 +209,11 @@ test('missing Manage Roles stops with a friendly error', async () => {
   await assert.rejects(runSetup({ guild: g, store: tmpStore(), options: {} }), (e) => e.friendly && /ManageRoles/.test(e.message));
 });
 
-test('helpers: durations and verification codes', () => {
+test('helpers: durations', () => {
   assert.strictEqual(parseDuration('90'), 90 * 60e3);
   assert.strictEqual(parseDuration('1h30m'), 90 * 60e3);
   assert.strictEqual(parseDuration('2 d'), 2 * 86400e3);
   assert.strictEqual(parseDuration('soon'), null);
-  const code = makeCode();
-  assert.strictEqual(code.split(' ').length, 5);
-  assert.ok(squash(`My bio!\n${code.toUpperCase()}  :)`).includes(squash(code)));
 });
 
 (async () => {

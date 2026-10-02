@@ -6,8 +6,7 @@ const path = require('path');
 
 const DEFAULTS = () => ({
   setup: { done: false, studioName: null, roles: {}, categories: {}, channels: {}, messages: {}, ranAt: null, ranBy: null },
-  settings: { welcomeEnabled: true, autoRoleOnJoin: true, verifyRequired: true, staffApplicationsOpen: true },
-  verify: { pending: {}, links: {} },
+  settings: { welcomeEnabled: true, autoRoleOnJoin: true, staffApplicationsOpen: true },
   warnings: {},
   cases: { counter: 0 },
   tickets: { counter: 0, open: {} },

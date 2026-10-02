@@ -1,6 +1,6 @@
 # PlayCode
 
-A Discord bot for one Roblox game studio's server. Run `/setup` once and it builds the whole server: roles, channels, permissions, a Roblox verification gate, ping-role menu and a ticket panel. After that it runs the day-to-day: bug reports, suggestions, devlogs and update posts, playtests with RSVPs, tickets and moderation.
+A Discord bot for one Roblox game studio's server. Run `/setup` once and it builds the whole server: roles, channels, permissions, a verification gate that works with RoVer, ping-role menu and a ticket panel. After that it runs the day-to-day: bug reports, suggestions, devlogs and update posts, playtests with RSVPs, tickets and moderation.
 
 It only works in the one server you point it at and leaves any other server it gets added to.
 
@@ -12,7 +12,7 @@ It only works in the one server you point it at and leaves any other server it g
 
 | Category | Channels | Who sees it |
 |---|---|---|
-| START HERE | welcome, rules, verify, roles | Everyone. #verify disappears once you're verified |
+| START HERE | welcome, rules, verify, roles | #welcome, #rules and #verify for everyone. #verify disappears once you have Verified |
 | NEWS | announcements, game-updates, devlogs, playtests | Members read, staff post |
 | COMMUNITY | general, media, off-topic, suggestions, bug-reports, bot-commands | Members. Suggestions and bug reports are bot posts with discussion threads |
 | SUPPORT | support (ticket panel) | Members |
@@ -21,23 +21,19 @@ It only works in the one server you point it at and leaves any other server it g
 | VOICE | Lounge, Playtest, Dev Meeting, Staff | Members / team / staff |
 | TICKETS | (ticket channels are created here) | Staff and the ticket owner |
 
-**Panels** posted automatically: welcome guide, rules, verify button, ping-role menu, ticket buttons.
+**Panels** posted automatically: welcome guide, rules, RoVer verify instructions, ping-role menu, ticket buttons.
 
-`/setup` options:
+`/setup` has no options. One run builds everything: it uses the server name as the studio name, sets up the RoVer verification gate and posts every panel. Channels you already had with matching names (like #general) are moved into place and given the studio permissions. Nothing is ever deleted.
 
-- `studio_name`: shown on the panels. Defaults to the server name.
-- `verification`: `Roblox account link` (default), `Agree-to-rules button`, or `Off`.
-- `preview`: show what would change without touching anything.
-- `fix_permissions`: also reset permissions on channels that already existed.
-- `post_panels`: post/refresh the panels (default yes).
+It also removes channels that older versions of `/setup` made and that aren't in the layout anymore (the old STUDIO TEAM channels like #scripting and #git-feed), but only if they're still in STUDIO TEAM and nobody has posted in them.
 
-It's safe to run again. Anything it already made is found by ID, and existing channels or roles with the same name are reused instead of duplicated. Nothing is ever deleted. The first run shows a preview with a **Build it** button before changing anything. To change names, colours or the channel list, edit `src/setup/blueprint.js`.
+Run it again any time to put back anything that went missing. Re-runs don't touch permissions on channels it already set up, so changes you make by hand stick. To change names, colours or the channel list, edit `src/setup/blueprint.js`.
 
 ## Commands
 
 | Who | Commands |
 |---|---|
-| Everyone | `/bug`, `/suggest`, `/roblox`, `/whois`, `/ticket close`, `/help` |
+| Everyone | `/bug`, `/suggest`, `/roblox`, `/ticket close`, `/help` |
 | Studio team | `/post` (devlog, sneak peek), `/playtest schedule`, `/playtest cancel` |
 | Staff | `/post` (announcement, game update), `/note`, `/ticket add/remove`, status menus on bug and suggestion posts |
 | Moderation | `/warn`, `/warnings`, `/timeout`, `/untimeout`, `/kick`, `/ban`, `/unban`, `/purge`, `/slowmode`, `/lock`, `/unlock` |
@@ -45,7 +41,7 @@ It's safe to run again. Anything it already made is found by ID, and existing ch
 
 How the main features work:
 
-- **Roblox verification**: the member enters their username, pastes a five-word code into their Roblox profile About section and presses Check. They get the Verified role and their nickname is set to their Roblox name. Members who leave and rejoin are re-verified automatically. Word codes are used because Roblox's filter often hides random letters and numbers.
+- **Verification (RoVer)**: PlayCode doesn't verify anyone itself. [RoVer](https://rover.link) links Roblox accounts and sets nicknames; PlayCode just builds the gate. New members only see #welcome, #rules and #verify until they have the **Verified** role, then the rest of the server opens up. In RoVer's settings, set its verified role to the **Verified** role PlayCode made, and put RoVer's own role above Verified so it can hand it out.
 - **Bug reports and suggestions**: `/bug` and `/suggest` open a form, post to the right channel with a discussion thread, and get a number. Staff change the status from a menu on the post (Confirmed, Fixed, Planned, Denied…), and the author gets a DM when it's resolved. Suggestions have up/down vote buttons.
 - **Tickets**: Get help, Report a player, Join the team (applications also copy to #applications) and Business. Each opens a private channel. Closing one saves a transcript to #mod-log and DMs a copy to the member.
 - **Posts**: `/post` opens a form so line breaks work. Game updates turn each line into a bullet and ping Update Ping; devlogs ping Devlog Ping. Posts in announcement channels are auto-published to following servers.
@@ -83,7 +79,7 @@ Then type `/setup` in your server.
 1. Push this repo to GitHub.
 2. In Railway: **New Project → Deploy from GitHub repo** and pick it. Railway runs `npm start` automatically.
 3. Add the variables `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID` (and `OWNER_IDS` if you want).
-4. Add a **Volume** to the service mounted at `/data`, and set `DATA_DIR=/data`. Without a volume, warnings, verification links, ticket numbers and the setup map are lost on every redeploy.
+4. Add a **Volume** to the service mounted at `/data`, and set `DATA_DIR=/data`. Without a volume, warnings, ticket numbers and the setup map are lost on every redeploy.
 
 Any host that runs Node works the same way. If the host needs an open port, set `PORT` and the bot answers health checks on it.
 
@@ -97,7 +93,7 @@ src/
   setup/runSetup.js     builds/repairs the server from the blueprint
   setup/panels.js       welcome, rules, verify, roles and ticket panels
   commands/             admin, moderation and community slash commands
-  features/             verification, ping roles, tickets, bugs/suggestions, posts, playtests, join/leave
+  features/             ping roles, tickets, bugs/suggestions, posts, playtests, join/leave
   lib/                  data store, Roblox API, shared helpers
 test/mock-setup.test.js
 ```

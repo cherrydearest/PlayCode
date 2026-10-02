@@ -13,7 +13,7 @@ function welcomePanel(store, guild) {
   const verifying = store.get('settings', 'verification') !== 'off';
   const steps = [
     `**1.** Read the ${ch(store, 'rules', '#rules')}.`,
-    verifying ? `**2.** Verify in ${ch(store, 'verify', '#verify')} to unlock the server.` : null,
+    verifying ? `**2.** Verify your Roblox account with \`/verify\` in ${ch(store, 'verify', '#verify')} to unlock the server.` : null,
     `**${verifying ? 3 : 2}.** Pick your pings in ${ch(store, 'roles', '#roles')}.`,
     `**${verifying ? 4 : 3}.** Say hi in ${ch(store, 'general', '#general')}.`,
   ].filter(Boolean);
@@ -38,28 +38,18 @@ function rulesPanel(store, guild) {
 }
 
 function verifyPanel(store) {
-  const mode = store.get('settings', 'verification') || 'roblox';
-  if (mode === 'button') {
-    return {
-      embeds: [embed('ok').setTitle('Verify').setDescription(`Read the ${ch(store, 'rules', '#rules')}, then press the button to agree and unlock the server.`)],
-      components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('pc:verify:simple').setLabel('I agree to the rules').setStyle(ButtonStyle.Success).setEmoji('✅'))],
-    };
-  }
   return {
     embeds: [embed('ok').setTitle('Verify with Roblox')
       .setDescription([
-        'Link your Roblox account to unlock the server. It takes about a minute.',
+        'Link your Roblox account to unlock the rest of the server.',
         '',
-        '**1.** Press **Verify** and enter your Roblox username.',
-        '**2.** Paste the code I give you into your Roblox profile **About** section.',
-        '**3.** Press **Check**. You can remove the code afterwards.',
+        '**1.** Type **`/verify`** in this channel and pick the **RoVer** command.',
+        '**2.** Follow RoVer\'s steps to link your Roblox account.',
+        '**3.** Once you\'re verified, this channel disappears and the server opens up.',
         '',
-        'We only read your public profile. We never ask for your password.',
+        'Already verified but still stuck here? Type **`/update`** and RoVer will refresh your roles.',
+        'We never ask for your Roblox password.',
       ].join('\n'))],
-    components: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('pc:verify:start').setLabel('Verify').setStyle(ButtonStyle.Success).setEmoji('🔗'),
-      new ButtonBuilder().setCustomId('pc:verify:check').setLabel('Check').setStyle(ButtonStyle.Secondary).setEmoji('🔎'),
-    )],
   };
 }
 

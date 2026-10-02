@@ -8,7 +8,6 @@ const { respond } = require('./lib/util');
 const admin = require('./commands/admin');
 const moderation = require('./commands/moderation');
 const community = require('./commands/community');
-const verify = require('./features/verify');
 const roles = require('./features/roles');
 const tickets = require('./features/tickets');
 const feedback = require('./features/feedback');
@@ -22,7 +21,6 @@ const byName = new Map(COMMANDS.map((c) => [c.data.name, c]));
 // customId "pc:<feature>:…" → handler
 const COMPONENTS = {
   setup: admin.handleSetupButton,
-  verify: verify.handle,
   roles: roles.handle,
   ticket: tickets.handle,
   bug: feedback.handle,
@@ -47,7 +45,7 @@ function start() {
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
     partials: [Partials.GuildMember],
   });
-  const ctx = { client, store, config, pendingSetup: new Map() };
+  const ctx = { client, store, config };
 
   client.once(Events.ClientReady, async (c) => {
     console.log(`[ready] Logged in as ${c.user.tag}`);
@@ -58,7 +56,8 @@ function start() {
       if (config.leaveOtherGuilds) for (const g of others.values()) { console.log(`[guard] Leaving ${g.name} (${g.id}), not the home server`); await g.leave().catch(() => {}); }
     } else {
       // Never leave anything while the home server is missing: GUILD_ID is probably wrong.
-      console.warn(`[guard] I'm not in GUILD_ID ${config.guildId}. ${others.size ? `I'm in: ${others.map((g) => `${g.name} = ${g.id}`).join(', ')}. If that's your server, set GUILD_ID to that number and redeploy.` : 'Invite me with the link in the README.'}`);
+      console.warn(`[guard] I'm not in GUILD_ID ${config.guildId}. ${others.size ? `I'm in: ${others.map((g) => `${g.name} = ${g.id}`).join(', ')}. If that's your server, set GUILD_ID to that number and redeploy.` : 'I\'m not in any server yet.'}`);
+      console.warn(`[guard] Invite link: https://discord.com/oauth2/authorize?client_id=${c.user.id}&scope=bot+applications.commands&permissions=8&guild_id=${config.guildId}&disable_guild_select=true`);
     }
     try { await registerCommands(); } catch (e) { console.error('[commands] Registration failed:', e.message); }
     c.user.setPresence({ activities: [{ name: store.get('setup', 'studioName') ? `${store.get('setup', 'studioName')} · /help` : '/help', type: ActivityType.Watching }], status: 'online' });
@@ -69,7 +68,7 @@ function start() {
   });
 
   client.on(Events.GuildCreate, async (guild) => {
-    if (guild.id === config.guildId) { registerCommands().catch((e) => console.error('[commands]', e.message)); return; }
+    if (guild.id === config.guildId) { console.log(`[guard] Joined home server ${guild.name}. Run /setup there.`); registerCommands().catch((e) => console.error('[commands]', e.message)); return; }
     // Only leave other servers once the home server is confirmed, so a wrong GUILD_ID can't lock you out.
     if (!client.guilds.cache.has(config.guildId)) {
       console.warn(`[guard] Added to ${guild.name} (${guild.id}), but GUILD_ID is ${config.guildId}. Staying. If this is your studio server, set GUILD_ID=${guild.id} and redeploy.`);

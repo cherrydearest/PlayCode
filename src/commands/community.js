@@ -1,5 +1,5 @@
 'use strict';
-// Community and studio commands: /bug, /suggest, /note, /post, /playtest, /ticket, /roblox, /whois, /help.
+// Community and studio commands: /bug, /suggest, /note, /post, /playtest, /ticket, /roblox, /help.
 const { SlashCommandBuilder, PermissionFlagsBits: P, OverwriteType } = require('discord.js');
 const feedback = require('../features/feedback');
 const posts = require('../features/posts');
@@ -98,26 +98,11 @@ const commands = [
     },
   },
   {
-    data: new SlashCommandBuilder().setName('whois').setDescription('See a member\'s linked Roblox account').setDMPermission(false)
-      .addUserOption((o) => o.setName('member').setDescription('Who (default: you)')),
-    async execute(interaction, ctx) {
-      const user = interaction.options.getUser('member') || interaction.user;
-      const link = ctx.store.get('verify', 'links', user.id);
-      if (!link) return respond(interaction, `${user} hasn't linked a Roblox account.`);
-      const avatar = await roblox.getHeadshot(link.robloxId);
-      return interaction.reply({
-        embeds: [embed('info').setAuthor({ name: user.tag, iconURL: user.displayAvatarURL() }).setTitle(`${link.displayName || link.name} (@${link.name})`).setURL(roblox.profileUrl(link.robloxId)).setThumbnail(avatar)
-          .addFields({ name: 'Roblox ID', value: String(link.robloxId), inline: true }, { name: 'Linked', value: ts(link.at, 'R'), inline: true })],
-        allowedMentions: { parse: [] },
-      });
-    },
-  },
-  {
     data: new SlashCommandBuilder().setName('help').setDescription('What PlayCode can do').setDMPermission(false),
     async execute(interaction, ctx) {
       const staff = isStaff(interaction.member, ctx.store, ctx.config);
       const e = embed().setTitle('PlayCode commands').addFields(
-        { name: 'Everyone', value: '`/bug` report a bug · `/suggest` share an idea · `/roblox` look up a profile · `/whois` see someone\'s linked Roblox · `/ticket close` close your ticket' },
+        { name: 'Everyone', value: '`/bug` report a bug · `/suggest` share an idea · `/roblox` look up a profile · `/ticket close` close your ticket' },
         { name: 'Studio team', value: '`/post` devlogs and sneak peeks · `/playtest schedule` set up a test with RSVPs and reminders' },
       );
       if (staff) {

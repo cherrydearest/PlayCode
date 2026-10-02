@@ -1,6 +1,6 @@
 'use strict';
 // Admin commands: /setup, /panel, /config.
-const { SlashCommandBuilder, PermissionFlagsBits: P, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits: P, ChannelType } = require('discord.js');
 const { runSetup } = require('../setup/runSetup');
 const panels = require('../setup/panels');
 const { ROLES, CATEGORIES } = require('../setup/blueprint');
@@ -11,7 +11,6 @@ const ROLE_KEYS = ROLES.map((r) => ({ key: r.key, name: r.name }));
 const SETTINGS = {
   welcomeEnabled: 'Welcome messages',
   staffApplicationsOpen: 'Team applications open',
-  verifyNickname: 'Set nickname to Roblox name on verify',
   autoRoleOnJoin: 'Give Verified on join (when verification is off)',
 };
 
@@ -20,13 +19,14 @@ const list = (arr, max = 800) => (arr.length ? clip(arr.join(', '), max) : '—'
 function reportEmbed(r) {
   const title = r.preview ? 'Setup preview (nothing changed)' : 'Setup finished';
   const e = embed(r.preview ? 'info' : 'ok').setTitle(title)
-    .setDescription(`Studio: **${r.opts.studioName}** · Verification: **${r.opts.verification}**`)
+    .setDescription(`Studio: **${r.opts.studioName}** · Verification: **${r.opts.verification === 'off' ? 'off' : 'RoVer'}**`)
     .addFields(
       { name: r.preview ? 'Would create roles' : 'Created roles', value: list(r.created.roles), inline: false },
       { name: r.preview ? 'Would create channels' : 'Created channels', value: list([...r.created.categories.map((c) => `📁 ${c}`), ...r.created.channels]), inline: false },
     );
   const adopted = [...r.adopted.roles.map((x) => `@${x}`), ...r.adopted.categories.map((c) => `📁 ${c}`), ...r.adopted.channels];
   if (adopted.length) e.addFields({ name: r.preview ? 'Would reuse existing' : 'Reused existing', value: list(adopted) });
+  if (r.removed.length) e.addFields({ name: r.preview ? 'Would remove old channels' : 'Removed old channels', value: list(r.removed) });
   if (r.repaired.length) e.addFields({ name: 'Permissions applied to', value: list(r.repaired) });
   if (r.panels.length) e.addFields({ name: 'Panels', value: r.panels.join('\n') });
   if (r.warnings.length) e.addFields({ name: 'Heads up', value: clip(r.warnings.map((w) => `• ${w}`).join('\n'), 900) });
@@ -35,40 +35,14 @@ function reportEmbed(r) {
 }
 
 const setup = {
-  data: new SlashCommandBuilder().setName('setup').setDescription('Build or repair the studio server: roles, channels, permissions and panels.')
-    .setDefaultMemberPermissions(P.ManageGuild).setDMPermission(false)
-    .addStringOption((o) => o.setName('studio_name').setDescription('Your studio name (shown in panels). Defaults to the server name.').setMaxLength(60))
-    .addStringOption((o) => o.setName('verification').setDescription('How new members unlock the server (default: Roblox account link)')
-      .addChoices({ name: 'Roblox account link', value: 'roblox' }, { name: 'Agree-to-rules button', value: 'button' }, { name: 'Off (everyone sees everything)', value: 'off' }))
-    .addBooleanOption((o) => o.setName('preview').setDescription('Show what would change without changing anything'))
-    .addBooleanOption((o) => o.setName('fix_permissions').setDescription('Also reset permissions on existing channels to the studio layout'))
-    .addBooleanOption((o) => o.setName('post_panels').setDescription('Post/update the welcome, rules, verify, roles and ticket panels (default: yes)')),
+  // One command, no options: builds everything with the defaults (server name, RoVer verification gate,
+  // all panels). Run it again any time to repair missing roles, channels or panels.
+  data: new SlashCommandBuilder().setName('setup').setDescription('Set up the whole studio server automatically: roles, channels, permissions and panels.')
+    .setDefaultMemberPermissions(P.ManageGuild).setDMPermission(false),
   async execute(interaction, ctx) {
     if (!isAdmin(interaction.member, ctx.config)) return respond(interaction, 'Only the server owner or admins can run /setup.');
-    const options = {
-      studioName: interaction.options.getString('studio_name') || undefined,
-      verification: interaction.options.getString('verification') || undefined,
-      preview: interaction.options.getBoolean('preview') ?? false,
-      fixPermissions: interaction.options.getBoolean('fix_permissions') ?? false,
-      postPanels: interaction.options.getBoolean('post_panels') ?? true,
-    };
-    // First real run (or a permission reset) changes a lot, so confirm it.
-    const firstRun = !ctx.store.get('setup', 'done');
-    if (!options.preview && (firstRun || options.fixPermissions)) {
-      const preview = await runSetup({ guild: interaction.guild, store: ctx.store, options: { ...options, preview: true } }).catch((e) => e);
-      if (preview instanceof Error) return respond(interaction, preview.friendly ? preview.message : `Setup check failed: ${preview.message}`);
-      ctx.pendingSetup.set(interaction.user.id, { options, at: Date.now() });
-      return interaction.reply({
-        flags: EPHEMERAL,
-        embeds: [reportEmbed(preview).setFooter({ text: options.fixPermissions ? 'fix_permissions will replace permissions on existing channels.' : 'Nothing is deleted. Existing channels with matching names are reused.' })],
-        components: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('pc:setup:go').setLabel('Build it').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId('pc:setup:cancel').setLabel('Cancel').setStyle(ButtonStyle.Secondary),
-        )],
-      });
-    }
     await interaction.deferReply({ flags: EPHEMERAL });
-    return build(interaction, ctx, options);
+    return build(interaction, ctx, { postPanels: true });
   },
 };
 
@@ -89,15 +63,9 @@ async function build(interaction, ctx, options) {
   }
 }
 
-// Confirm / cancel buttons from the /setup preview.
-async function handleSetupButton(interaction, ctx) {
-  const action = interaction.customId.split(':')[2];
-  const pending = ctx.pendingSetup.get(interaction.user.id);
-  ctx.pendingSetup.delete(interaction.user.id);
-  if (action === 'cancel' || !pending) return interaction.update({ content: action === 'cancel' ? 'Cancelled. Nothing was changed.' : 'That preview expired. Run /setup again.', embeds: [], components: [] });
-  if (!isAdmin(interaction.member, ctx.config)) return respond(interaction, 'Only admins can run setup.');
-  await interaction.update({ content: '⚙️ Setting up…', embeds: [], components: [] });
-  return build(interaction, ctx, pending.options);
+// Old preview buttons (from earlier versions) just point people back to /setup.
+async function handleSetupButton(interaction) {
+  return interaction.update({ content: 'Just run /setup. It does everything in one go now.', embeds: [], components: [] });
 }
 
 const panel = {
@@ -155,7 +123,7 @@ const configCmd = {
       const st = Object.entries(SETTINGS).map(([k, n]) => `${store.get('settings', k) === false ? '⬜' : '✅'} ${n}`);
       return respond(interaction, {
         embeds: [embed('info').setTitle(`${s.studioName || interaction.guild.name} · PlayCode`)
-          .setDescription(s.done ? `Set up ${s.ranAt ? `<t:${Math.floor(new Date(s.ranAt) / 1000)}:R>` : ''} · verification: **${store.get('settings', 'verification') || 'roblox'}**` : 'Not set up yet. Run **/setup**.')
+          .setDescription(s.done ? `Set up ${s.ranAt ? `<t:${Math.floor(new Date(s.ranAt) / 1000)}:R>` : ''} · verification: **${store.get('settings', 'verification') === 'off' ? 'off' : 'RoVer'}**` : 'Not set up yet. Run **/setup**.')
           .addFields({ name: 'Settings', value: st.join('\n') }, { name: 'Roles', value: clip(rl.join(' ') || '—', 1024) }, { name: 'Channels', value: clip(ch.join('\n') || '—', 1024) })],
         allowedMentions: { parse: [] },
       });

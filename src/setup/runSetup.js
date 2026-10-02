@@ -2,7 +2,7 @@
 // /setup engine. Builds (or repairs) the server from blueprint.js. Safe to run again: anything that
 // already exists is reused by ID, or adopted by name, instead of being duplicated.
 const { ChannelType, PermissionFlagsBits: P, OverwriteType } = require('discord.js');
-const { ROLES, CATEGORIES } = require('./blueprint');
+const { ROLES, CATEGORIES, RETIRED } = require('./blueprint');
 const panels = require('./panels');
 const { TEAM_KEYS, STAFF_KEYS } = require('../lib/util');
 
@@ -79,13 +79,14 @@ const permName = (bit) => Object.keys(P).find((k) => P[k] === bit) || String(bit
 async function runSetup({ guild, store, options = {}, progress = () => {} }) {
   const opts = {
     studioName: options.studioName || store.get('setup', 'studioName') || guild.name,
-    verification: options.verification || store.get('settings', 'verification') || 'roblox',
+    // RoVer handles Roblox verification and gives the Verified role. 'off' skips the gate entirely.
+    verification: (options.verification || store.get('settings', 'verification')) === 'off' ? 'off' : 'rover',
     fixPermissions: !!options.fixPermissions,
     postPanels: options.postPanels !== false,
     preview: !!options.preview,
   };
   const me = guild.members.me || await guild.members.fetchMe();
-  const report = { preview: opts.preview, created: { roles: [], categories: [], channels: [] }, adopted: { roles: [], categories: [], channels: [] }, repaired: [], panels: [], warnings: [], opts };
+  const report = { preview: opts.preview, created: { roles: [], categories: [], channels: [] }, adopted: { roles: [], categories: [], channels: [] }, removed: [], repaired: [], panels: [], warnings: [], opts };
 
   // 0. Can we do this at all?
   const needed = [P.ManageRoles, P.ManageChannels];
@@ -153,9 +154,10 @@ async function runSetup({ guild, store, options = {}, progress = () => {} }) {
   for (const cat of CATEGORIES) {
     progress(`Category ${cat.name}`);
     let category = catIds[cat.key] && guild.channels.cache.get(catIds[cat.key]);
+    let catAdopted = false;
     if (!category) {
       category = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && norm(c.name) === norm(cat.name));
-      if (category) report.adopted.categories.push(cat.name);
+      if (category) { catAdopted = true; report.adopted.categories.push(cat.name); }
     }
     const profile = cat.profile || catProfile[cat.key];
     if (!category) {
@@ -166,8 +168,9 @@ async function runSetup({ guild, store, options = {}, progress = () => {} }) {
           permissionOverwrites: profile ? apply(profile, true) : [], reason: 'PlayCode /setup',
         });
       }
-    } else if (opts.fixPermissions && profile && !opts.preview) {
-      await category.permissionOverwrites.set(apply(profile, true), 'PlayCode /setup (fix permissions)');
+    } else if ((opts.fixPermissions || catAdopted) && profile && !opts.preview) {
+      // Existing categories PlayCode takes over get the studio permissions; ones it already manages are left as you've tuned them.
+      await category.permissionOverwrites.set(apply(profile, true), 'PlayCode /setup');
       report.repaired.push(category.name);
     }
     if (category) catIds[cat.key] = category.id;
@@ -177,12 +180,13 @@ async function runSetup({ guild, store, options = {}, progress = () => {} }) {
       const type = ch.voice ? ChannelType.GuildVoice : (ch.announcement && community ? ChannelType.GuildAnnouncement : ChannelType.GuildText);
       const sameKind = (c) => (ch.voice ? c.type === ChannelType.GuildVoice : [ChannelType.GuildText, ChannelType.GuildAnnouncement].includes(c.type));
       let channel = chIds[ch.key] && guild.channels.cache.get(chIds[ch.key]);
+      let adopted = false;
       if (!channel) {
         const matches = guild.channels.cache.filter((c) => sameKind(c) && norm(c.name) === norm(ch.name));
         channel = matches.find((c) => category && c.parentId === category.id) || matches.first();
         // Don't adopt a channel another blueprint key already owns.
         if (channel && Object.values(chIds).includes(channel.id)) channel = null;
-        if (channel) { report.adopted.channels.push(`#${channel.name}`); }
+        if (channel) { adopted = true; report.adopted.channels.push(`#${channel.name}`); }
       }
       if (!channel) {
         report.created.channels.push(ch.voice ? `🔊 ${ch.name}` : `#${ch.name}`);
@@ -193,16 +197,33 @@ async function runSetup({ guild, store, options = {}, progress = () => {} }) {
         });
       } else if (!opts.preview) {
         if (category && channel.parentId !== category.id) await channel.setParent(category.id, { lockPermissions: false, reason: 'PlayCode /setup' }).catch(() => {});
-        if (opts.fixPermissions) {
-          await channel.permissionOverwrites.set(apply(ch.profile, !!ch.voice), 'PlayCode /setup (fix permissions)');
+        if (opts.fixPermissions || adopted) {
+          await channel.permissionOverwrites.set(apply(ch.profile, !!ch.voice), 'PlayCode /setup');
           report.repaired.push(`#${channel.name}`);
         }
       }
       chIds[ch.key] = channel.id;
     }
   }
+  // Clean up channels older versions made: only inside the right category, only if nobody has posted.
+  // Forget channel keys that aren't in the blueprint anymore, so only current channels count as wanted.
+  const blueprintKeys = new Set(CATEGORIES.flatMap((c) => c.channels.map((x) => x.key)));
+  for (const k of Object.keys(chIds)) if (!blueprintKeys.has(k)) delete chIds[k];
+  const wanted = new Set(Object.values(chIds));
+  for (const r of RETIRED) {
+    const parentId = catIds[r.category];
+    if (!parentId) continue;
+    const names = new Set(r.names.map(norm));
+    const old = guild.channels.cache.filter((c) => c.parentId === parentId && !wanted.has(c.id) && names.has(norm(c.name)));
+    for (const ch of old.values()) {
+      if (opts.preview) { report.removed.push(`#${ch.name}`); continue; }
+      const recent = ch.messages?.fetch ? await ch.messages.fetch({ limit: 10 }).catch(() => null) : null;
+      const used = recent && [...recent.values()].some((m) => !m.author?.bot);
+      if (used) { report.warnings.push(`Kept #${ch.name} because people have posted in it. Delete it by hand if you don't need it.`); continue; }
+      await ch.delete('PlayCode /setup: channel no longer in the layout').then(() => report.removed.push(`#${ch.name}`)).catch((e) => report.warnings.push(`Couldn't delete #${ch.name}: ${e.message}`));
+    }
+  }
   if (dropped.size) report.warnings.push(`Some permissions were left out because my role doesn't have them: ${[...dropped].map(permName).join(', ')}.`);
-  if (report.adopted.channels.length && !opts.fixPermissions) report.warnings.push(`I reused ${report.adopted.channels.length} existing channel(s) and left their permissions alone. Run /setup fix_permissions:True to apply the studio permissions to them too.`);
 
   if (opts.preview) return report;
 
