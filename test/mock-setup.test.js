@@ -132,7 +132,7 @@ test('permissions: unverified, members, team and staff see the right things', as
   await runSetup({ guild: g, store: s, options: {} });
   const every = g.id; const ver = s.roleId('verified'); const scr = s.roleId('scripter'); const mod = s.roleId('moderator');
   const rules = byKey(g, s, 'rules'); const verifyCh = byKey(g, s, 'verify'); const general = byKey(g, s, 'general');
-  const team = byKey(g, s, 'scripting'); const staff = byKey(g, s, 'modLog'); const bugs = byKey(g, s, 'bugReports');
+  const team = byKey(g, s, 'teamChat'); const staff = byKey(g, s, 'modLog'); const bugs = byKey(g, s, 'bugReports');
   assert.ok(allow(rules, every, P.ViewChannel) && deny(rules, every, P.SendMessages), 'rules readable, not writable');
   assert.ok(allow(verifyCh, every, P.ViewChannel) && deny(verifyCh, ver, P.ViewChannel), 'verify hides once verified');
   assert.ok(deny(general, every, P.ViewChannel) && allow(general, ver, P.SendMessages) && allow(general, scr, P.SendMessages), 'general for members');

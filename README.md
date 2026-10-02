@@ -16,7 +16,7 @@ It only works in the one server you point it at and leaves any other server it g
 | NEWS | announcements, game-updates, devlogs, playtests | Members read, staff post |
 | COMMUNITY | general, media, off-topic, suggestions, bug-reports, bot-commands | Members. Suggestions and bug reports are bot posts with discussion threads |
 | SUPPORT | support (ticket panel) | Members |
-| STUDIO TEAM | team-chat, tasks, scripting, building, modeling, ui-design, animation, audio, assets, playtest-notes, git-feed | Dev roles and staff |
+| STUDIO TEAM | team-chat, tasks | Dev roles and staff |
 | STAFF | staff-chat, mod-log, applications | Staff |
 | VOICE | Lounge, Playtest, Dev Meeting, Staff | Members / team / staff |
 | TICKETS | (ticket channels are created here) | Staff and the ticket owner |
@@ -51,7 +51,6 @@ How the main features work:
 - **Posts**: `/post` opens a form so line breaks work. Game updates turn each line into a bullet and ping Update Ping; devlogs ping Devlog Ping. Posts in announcement channels are auto-published to following servers.
 - **Playtests**: `/playtest schedule starts_in:2h` posts a card with Going/Maybe/Can't buttons, pings Playtest Ping, reminds the Going list 15 minutes before and at start.
 - **Moderation**: every action gets a case number in #mod-log and the member is DM'd when possible. Joins (with a new-account warning) and leaves are logged too.
-- **Git feed**: for commit messages in #git-feed, make a webhook in that channel and add it to your GitHub repo with `/github` on the end of the URL and content type `application/json`.
 
 ## Setting it up
 

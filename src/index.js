@@ -51,11 +51,15 @@ function start() {
 
   client.once(Events.ClientReady, async (c) => {
     console.log(`[ready] Logged in as ${c.user.tag}`);
-    for (const g of c.guilds.cache.values()) {
-      if (g.id !== config.guildId && config.leaveOtherGuilds) { console.log(`[guard] Leaving ${g.name} (${g.id}), not the home server`); await g.leave().catch(() => {}); }
-    }
     const home = c.guilds.cache.get(config.guildId);
-    if (!home) console.warn(`[guard] I'm not in GUILD_ID ${config.guildId} yet. Invite me with the link in the README.`);
+    const others = c.guilds.cache.filter((g) => g.id !== config.guildId);
+    if (home) {
+      console.log(`[guard] Home server: ${home.name} (${home.id})`);
+      if (config.leaveOtherGuilds) for (const g of others.values()) { console.log(`[guard] Leaving ${g.name} (${g.id}), not the home server`); await g.leave().catch(() => {}); }
+    } else {
+      // Never leave anything while the home server is missing: GUILD_ID is probably wrong.
+      console.warn(`[guard] I'm not in GUILD_ID ${config.guildId}. ${others.size ? `I'm in: ${others.map((g) => `${g.name} = ${g.id}`).join(', ')}. If that's your server, set GUILD_ID to that number and redeploy.` : 'Invite me with the link in the README.'}`);
+    }
     try { await registerCommands(); } catch (e) { console.error('[commands] Registration failed:', e.message); }
     c.user.setPresence({ activities: [{ name: store.get('setup', 'studioName') ? `${store.get('setup', 'studioName')} · /help` : '/help', type: ActivityType.Watching }], status: 'online' });
     setInterval(() => {
@@ -66,7 +70,12 @@ function start() {
 
   client.on(Events.GuildCreate, async (guild) => {
     if (guild.id === config.guildId) { registerCommands().catch((e) => console.error('[commands]', e.message)); return; }
-    if (config.leaveOtherGuilds) { console.log(`[guard] Added to ${guild.name} (${guild.id}); leaving.`); await guild.leave().catch(() => {}); }
+    // Only leave other servers once the home server is confirmed, so a wrong GUILD_ID can't lock you out.
+    if (!client.guilds.cache.has(config.guildId)) {
+      console.warn(`[guard] Added to ${guild.name} (${guild.id}), but GUILD_ID is ${config.guildId}. Staying. If this is your studio server, set GUILD_ID=${guild.id} and redeploy.`);
+      return;
+    }
+    if (config.leaveOtherGuilds) { console.log(`[guard] Added to ${guild.name} (${guild.id}); not the home server, leaving.`); await guild.leave().catch(() => {}); }
   });
 
   client.on(Events.GuildMemberAdd, (m) => members.onJoin(m, ctx).catch((e) => console.error('[join]', e.message)));

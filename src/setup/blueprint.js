@@ -70,15 +70,6 @@ const CATEGORIES = [
     key: 'catTeam', name: 'STUDIO TEAM', channels: [
       { key: 'teamChat', name: 'team-chat', profile: 'team', topic: 'Studio team chat.' },
       { key: 'tasks', name: 'tasks', profile: 'team', topic: 'What everyone is working on.' },
-      { key: 'scripting', name: 'scripting', profile: 'team', topic: 'Luau, systems, code review.' },
-      { key: 'building', name: 'building', profile: 'team', topic: 'Maps and environment.' },
-      { key: 'modeling', name: 'modeling', profile: 'team', topic: 'Models, meshes and textures.' },
-      { key: 'uiDesign', name: 'ui-design', profile: 'team', topic: 'Interfaces and icons.' },
-      { key: 'animation', name: 'animation', profile: 'team', topic: 'Animations and VFX.' },
-      { key: 'audio', name: 'audio', profile: 'team', topic: 'Music and sound effects.' },
-      { key: 'assets', name: 'assets', profile: 'team', topic: 'Share files and asset IDs.' },
-      { key: 'playtestNotes', name: 'playtest-notes', profile: 'team', topic: 'Findings from playtests.' },
-      { key: 'gitFeed', name: 'git-feed', profile: 'team', topic: 'Point a GitHub webhook here (Server Settings → Integrations → Webhooks, add /github to the URL).' },
     ],
   },
   {
